@@ -11,7 +11,25 @@ import os
 import json
 import math
 import pandas as pd
+import copy
 
+
+def colorPick(img,x,y,w,h):
+	scale = 3
+	y1 = math.ceil(y+h/scale)
+	y2 = math.ceil(y+h-h/scale)
+	x1 = math.ceil(x+w/scale)
+	x2 = math.ceil(x+w-w/scale)
+
+	croppedImage = img[y1:y2,x1:x2]
+
+	rvalue = np.mean([np.mean(pixel[0]) for pixel in croppedImage[0]])
+	bvalue = np.mean([np.mean(pixel[2]) for pixel in croppedImage[0]])
+
+	if rvalue < bvalue:
+		return [0,0,255]
+	else:
+		return [255,0,0]
 
 def euclidean_distance(p1, p2):
 	return np.linalg.norm(np.array(p1) - np.array(p2))
@@ -167,10 +185,8 @@ while True:
 
 	# apply non-maxima suppression to suppress weak, overlapping
 	# bounding boxes
-	print("BOXES", boxes)
 	idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"],
 		args["threshold"])
-	print("IDXs",idxs)
 
 
 	players = {}
@@ -198,11 +214,13 @@ while True:
 					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': -1}
 					playerDatabase[playercnt] = {'X':x,'Y':y,'W':w,'H':h}
 
-				color = [int(c) for c in COLORS[classIDs[i]]]
+				color = colorPick(frame,x,y,w,h)
 				cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 				cv2.putText(frame, str(players[playercnt]['closestPlayer']), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-				playercnt += 1	
+				playercnt += 1
+
+	outputArray.append(copy.deepcopy(playerDatabase))
 
 				# print("Name:%s X:%d Y:%d W:%d H:%d" %(str(text),x,y,w,h))
 	# check if the video writer is None
@@ -222,8 +240,8 @@ while True:
 	# write the output frame to disk
 	writer.write(frame)
 	# print(players)
-	outputArray.append(playerDatabase)
-	if (frames >= 1000):
+	
+	if (frames >= 5000):
 		break
 	# print(frames)
 
