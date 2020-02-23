@@ -10,25 +10,34 @@ import cv2
 import os
 import json
 import math
+import pandas as pd
 
 
 def euclidean_distance(p1, p2):
-	print(p1,p2)
-	return math.sqrt((p1['X'] - p2['X'])**2 + (p1['Y'] - p2['Y'])**2)
+	return np.linalg.norm(np.array(p1) - np.array(p2))
 
 
 def find_nearest(new_player, old_frame):
 	closest_player_ndx = -1
-	nearest_distance = 1000
-	for old_ndx, old_player in enumerate(old_frame):
+	nearest_distance = float('inf')
+	for old_ndx, old_player in old_frame.items():
 		if old_player is None:
 			continue
-		distance = euclidean_distance(new_player, old_player)
-		if distance < nearest_distance:
-			nearest_distance = distance
+		topLeftDistance = euclidean_distance((new_player['X'],new_player['Y']),(old_player['X'],old_player['Y']))
+		bottomRightDistance = euclidean_distance((new_player['X']+new_player['W'],new_player['Y']+new_player['H']),(old_player['X']+old_player['W'],old_player['Y']+old_player['H']))
+		if np.mean([topLeftDistance,bottomRightDistance]) < nearest_distance:
+			nearest_distance = np.mean([topLeftDistance,bottomRightDistance])
 			closest_player_ndx = old_ndx
 			
 	return closest_player_ndx
+
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+
+def withinTrap(X,Y):
+	point = Point(X,Y)
+	polygon = Polygon([(0, 1080),(0,582),(627,225),(1259,225),(1920,650),(1920,1080)])
+	return polygon.contains(point)
         
 
 # construct the argument parse and parse the arguments
@@ -42,7 +51,7 @@ ap.add_argument("-y", "--yolo", required=True,
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
 	help="minimum probability to filter weak detections")
 ap.add_argument("-t", "--threshold", type=float, default=0.3,
-	help="threshold when applyong non-maxima suppression")
+	help="threshold when applying non-maxima suppression")
 args = vars(ap.parse_args())
 
 # load the COCO class labels our YOLO model was trained on
@@ -86,6 +95,7 @@ except:
 	total = -1
 
 outputArray = []
+playerDatabase = {}
 frames = -1
 
 # loop over frames from the video file stream
@@ -102,6 +112,7 @@ while True:
 	# if the frame dimensions are empty, grab them
 	if W is None or H is None:
 		(H, W) = frame.shape[:2]
+		print("OMG YESSSSS",H,W)
 
 	# construct a blob from the input frame and then perform a forward
 	# pass of the YOLO object detector, giving us our bounding boxes
@@ -156,8 +167,11 @@ while True:
 
 	# apply non-maxima suppression to suppress weak, overlapping
 	# bounding boxes
+	print("BOXES", boxes)
 	idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"],
 		args["threshold"])
+	print("IDXs",idxs)
+
 
 	players = {}
 	playercnt = 0
@@ -171,45 +185,47 @@ while True:
 			(w, h) = (boxes[i][2], boxes[i][3])
 			
 
-			# draw a bounding box rectangle and label on the frame
-			# color = [int(c) for c in COLORS[classIDs[i]]]
-			# cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 			text = LABELS[classIDs[i]]
-			# cv2.putText(frame, text, (x, y - 5),
-			# 	cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+			# draw a bounding box rectangle and label on the frame
 
 
-			if (str(text) == "person"):
+			if (str(text) == "person" and w < 500 and withinTrap(x,y)):
 				if outputArray:
-					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': find_nearest({'X':x,'Y':y}, outputArray[-1])}
+					nearestNeighbor = find_nearest({'X':x,'Y':y,'W':w,'H':h}, playerDatabase)
+					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': nearestNeighbor}
+					playerDatabase[nearestNeighbor] = {'X':x,'Y':y,'W':w,'H':h}
 				else:
 					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': -1}
+					playerDatabase[playercnt] = {'X':x,'Y':y,'W':w,'H':h}
+
+				color = [int(c) for c in COLORS[classIDs[i]]]
+				cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+				cv2.putText(frame, str(players[playercnt]['closestPlayer']), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
 				playercnt += 1	
-
-
 
 				# print("Name:%s X:%d Y:%d W:%d H:%d" %(str(text),x,y,w,h))
 	# check if the video writer is None
-	# if writer is None:
-	# 	# initialize our video writer
-	# 	fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-	# 	writer = cv2.VideoWriter(args["output"], fourcc, 30,
-	# 		(frame.shape[1], frame.shape[0]), True)
+	if writer is None:
+		# initialize our video writer
+		fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+		writer = cv2.VideoWriter(args["output"], fourcc, 30,
+			(frame.shape[1], frame.shape[0]), True)
 
 		# some information on processing single frame
-		# if total > 0:
-		# 	elap = (end - start)
-		# 	print("[INFO] single frame took {:.4f} seconds".format(elap))
-		# 	print("[INFO] estimated total time to finish: {:.4f}".format(
-		# 		elap * total))
+		if total > 0:
+			elap = (end - start)
+			print("[INFO] single frame took {:.4f} seconds".format(elap))
+			print("[INFO] estimated total time to finish: {:.4f}".format(
+				elap * total))
 
 	# write the output frame to disk
-	# writer.write(frame)
+	writer.write(frame)
 	# print(players)
-	outputArray.append(players)
-	if (frames >= 10):
+	outputArray.append(playerDatabase)
+	if (frames >= 1000):
 		break
-	print(frames)
+	# print(frames)
 
 # release the file pointers
 with open('data.json', 'w') as json_file:
