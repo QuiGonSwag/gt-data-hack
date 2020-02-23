@@ -13,23 +13,22 @@ import math
 
 
 def euclidean_distance(p1, p2):
-    return math.sqrt((p1['X'] - p2['X'])**2 + (p1['Y'] - p2['Y'])**2)
+	print(p1,p2)
+	return math.sqrt((p1['X'] - p2['X'])**2 + (p1['Y'] - p2['Y'])**2)
+
 
 def find_nearest(new_player, old_frame):
-        closest_player_ndx = -1
-        nearest_distance = 1000
-        for old_ndx, old_player in enumerate(old_frame):
-            
-            if old_player is None:
-                continue
-            
-            distance = euclidean_distance(new_player, old_player)
-            if distance < nearest_distance:
-                nearest_distance = distance
-                
-                closest_player_ndx = old_ndx
-                
-        return closest_player_ndx
+	closest_player_ndx = -1
+	nearest_distance = 1000
+	for old_ndx, old_player in enumerate(old_frame):
+		if old_player is None:
+			continue
+		distance = euclidean_distance(new_player, old_player)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			closest_player_ndx = old_ndx
+			
+	return closest_player_ndx
         
 
 # construct the argument parse and parse the arguments
@@ -208,7 +207,7 @@ while True:
 	# writer.write(frame)
 	# print(players)
 	outputArray.append(players)
-	if (frames >= 100):
+	if (frames >= 10):
 		break
 	print(frames)
 
