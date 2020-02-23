@@ -9,6 +9,28 @@ import time
 import cv2
 import os
 import json
+import math
+
+
+def euclidean_distance(p1, p2):
+    return math.sqrt((p1['X'] - p2['X'])**2 + (p1['Y'] - p2['Y'])**2)
+
+def find_nearest(new_player, old_frame):
+        closest_player_ndx = -1
+        nearest_distance = 1000
+        for old_ndx, old_player in enumerate(old_frame):
+            
+            if old_player is None:
+                continue
+            
+            distance = euclidean_distance(new_player, old_player)
+            if distance < nearest_distance:
+                nearest_distance = distance
+                
+                closest_player_ndx = old_ndx
+                
+        return closest_player_ndx
+        
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -156,9 +178,17 @@ while True:
 			text = LABELS[classIDs[i]]
 			# cv2.putText(frame, text, (x, y - 5),
 			# 	cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+
 			if (str(text) == "person"):
-				players['player%d' %(playercnt)] = {'X':x,'Y':y,'W':w,'H':h}
+				if outputArray:
+					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': find_nearest({'X':x,'Y':y}, outputArray[-1])}
+				else:
+					players[playercnt] = {'X':x,'Y':y,'W':w,'H':h, 'closestPlayer': -1}
 				playercnt += 1	
+
+
+
 				# print("Name:%s X:%d Y:%d W:%d H:%d" %(str(text),x,y,w,h))
 	# check if the video writer is None
 	# if writer is None:
